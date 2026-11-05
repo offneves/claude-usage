@@ -1,0 +1,11 @@
+{
+  "name": "claude-usage",
+  "owner": { "name": "offneves" },
+  "plugins": [
+    {
+      "name": "token-usage",
+      "source": "./",
+      "description": "Mostra o uso de tokens, contexto, custo e limites numa faixa acima do prompt"
+    }
+  ]
+}

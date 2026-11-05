@@ -1,0 +1,7 @@
+{
+  "name": "token-usage",
+  "version": "0.1.0",
+  "description": "Mostra o uso de tokens, contexto, custo e limites numa faixa acima do prompt",
+  "types": "./types/index.d.ts",
+  "license": "MIT"
+}
