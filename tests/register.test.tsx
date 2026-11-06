@@ -124,17 +124,15 @@ test('faixa larga desenha barras e o tempo até o reset; estreita só números',
   const wideProps = { ...BAND.props, bodyColumns: 120 }
   let ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: wideProps })
   const ctx = (await ui.find({ type: 'Text', text: /90%/ }))?.text ?? ''
-  expect(ctx).toContain('▕')
-  expect(ctx).toContain('█')
-  expect(ctx).toContain('░▏')
+  expect(ctx).toContain('[■■■■■■■■■□] 90%')
   const limit = (await ui.find({ type: 'Text', text: /2h 10min/ }))?.text ?? ''
-  expect(limit).toContain('50%   2h 10min')
+  expect(limit).toContain('50% 2h 10min')
   expect(limit).not.toContain('renova')
   await ui.unmount()
 
-  ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 60 } })
+  ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 40 } })
   const narrow = (await ui.find({ type: 'Text', text: /90%/ }))?.text ?? ''
-  expect(narrow).not.toContain('█')
+  expect(narrow).not.toContain('■')
   expect(narrow).toContain('90%')
   await ui.unmount()
 })
@@ -160,7 +158,7 @@ test('Sessão fica numa linha quando cabe e quebra só em terminal estreito', as
   await ui.unmount()
 })
 
-test('o que vem depois do percentual fica alinhado entre as linhas', async ($, on) => {
+test('Contexto, 5h e semanal ficam lado a lado, nessa ordem, separados por bolinha, e empilham alinhados quando não cabem', async ($, on) => {
   on('session.measure', (_, e) => ({ changed: e.changed }))
   const now = Date.UTC(2026, 10, 5, 12)
   on('clock.now', () => ({ value: now }))
@@ -173,16 +171,20 @@ test('o que vem depois do percentual fica alinhado entre as linhas', async ($, o
     changed: ['context', 'rateLimits'],
   })
 
-  for (const cols of [120, 60]) {
-    const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: cols } })
-    const col = async (re: RegExp, needle: string) => {
-      const text = (await ui.find({ type: 'Text', text: re }))?.text ?? ''
-      return text.indexOf(needle)
-    }
-    const ctx = await col(/101k - 1M/, '101k')
-    expect(ctx).toBeGreaterThan(0)
-    expect(await col(/4h 18min/, '4h 18min')).toBe(ctx)
-    expect(await col(/6 dias/, '6 dias')).toBe(ctx)
-    await ui.unmount()
+  let ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 140 } })
+  expect((await ui.find({ type: 'Text', text: /Contexto/ }))?.text).toBe(
+    'Contexto  [■□□□□□□□□□] 10% 101k - 1M  •  Limite 5h  [■■□□□□□□□□] 23% 4h 18min  •  Limite semanal  [■□□□□□□□□□] 8% 6 dias',
+  )
+  await ui.unmount()
+
+  ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 100 } })
+  const col = async (re: RegExp, needle: string) => {
+    const text = (await ui.find({ type: 'Text', text: re }))?.text ?? ''
+    expect(text).not.toContain('•')
+    return text.indexOf(needle)
   }
+  expect(await col(/101k - 1M/, '10%')).toBe(await col(/4h 18min/, '23%'))
+  expect(await col(/101k - 1M/, '101k')).toBe(await col(/6 dias/, '6 dias'))
+  expect(await col(/4h 18min/, '4h 18min')).toBe(await col(/6 dias/, '6 dias'))
+  await ui.unmount()
 })

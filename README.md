@@ -3,20 +3,31 @@
 Mod do Claude Code que mostra, numa faixa acima do prompt, o uso de tokens da sessão atual:
 
 ```
-╭────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Contexto        ▕████░░░░░░░░░░░░░░░░▏ 21%   42k - 200k                                        Ocultar │
-│ Limite 5h       ▕█████░░░░░░░░░░░░░░░▏ 23%   2h 10min                                                  │
-│ Limite semanal  ▕██░░░░░░░░░░░░░░░░░░▏ 8%    3 dias                                                    │
-│                                                                                                        │
-│ Sessão          enviados 12.3k · gerados 3.1k · re-cache 80k · salvos no cache 5k · custo US$ 0.84     │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Contexto  [■■□□□□□□□□] 21% 42k - 200k  •  Limite 5h  [■■□□□□□□□□] 23% 2h 10min  •  Limite semanal  [■□□□□□□□□□] 8% 3 dias   Ocultar │
+│                                                                                                                                     │
+│ Sessão          enviados 12.3k · gerados 3.1k · re-cache 80k · salvos no cache 5k · custo US$ 0.84                                  │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-- **Contexto**: quanto da janela do modelo a conversa já ocupa (amarelo ≥70%, vermelho ≥85%)
+- **Contexto**: quanto da janela do modelo a conversa já ocupa
 - **Sessão**: tokens enviados ao modelo, gerados por ele, reutilizados do cache (re-cache) e gravados no cache, somados a cada turno (subagentes incluídos), e o custo em US$, como o `/cost`
 - **Limites de uso** (5 horas e semanal) e quanto falta para renovarem, quando a conta é por assinatura
 
-Cada item tem sua cor, que passa a amarelo e vermelho perto do limite; a linha **Sessão** fica em cinza claro para os outros se destacarem. Em terminais com menos de 94 colunas as barras somem e ficam só os números; se a linha **Sessão** não couber inteira, cache e custo descem para uma segunda linha.
+Contexto, Limite 5h e Limite semanal ficam lado a lado numa linha, separados por uma bolinha; quando o terminal é estreito demais para os três, eles ficam um embaixo do outro, nessa ordem, com rótulos, barras, percentuais e detalhes alinhados em colunas. A borda da faixa e as barras são laranja forte (os quadrados vazios e os colchetes em volta da barra ficam cinza), o percentual em branco e a linha **Sessão** em cinza claro. Em terminais com menos de 50 colunas as barras somem e ficam só os números; se a linha **Sessão** não couber inteira, cache e custo descem para uma segunda linha.
+
+Em terminal estreito:
+
+```
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Contexto        [■■□□□□□□□□] 21%  42k - 200k                         Ocultar │
+│ Limite 5h       [■■□□□□□□□□] 23%  2h 10min                                   │
+│ Limite semanal  [■□□□□□□□□□] 8%   3 dias                                     │
+│                                                                              │
+│ Sessão          enviados 12.3k · gerados 3.1k                                │
+│                 re-cache 80k · salvos no cache 5k · custo US$ 0.84           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
 
 Um toast avisa quando o contexto passa de 85% ou um limite passa de 90%.
 

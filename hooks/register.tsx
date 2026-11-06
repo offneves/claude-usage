@@ -21,17 +21,19 @@ const LIMIT_LABELS: Record<string, string> = {
   spend_limit: 'Limite de gasto',
 }
 
-const COLORS = {
-  context: 'claude',
-} as const satisfies Record<string, Color>
+/** Laranja forte das barras e da borda da faixa. */
+const ORANGE: Color = '#FF6B00'
+
+/** Percentual em branco (a cor de texto do tema), para contrastar com a barra. */
+const PERCENT: Color = 'text'
+
+/** Entre um item de uso e o próximo na mesma linha. */
+const SEPARATOR = '  •  '
+
+/** Colunas reservadas para o botão Ocultar. */
+const HIDE_WIDTH = 10
 
 const SESSION: Color = 'inactive'
-
-const LIMIT_COLORS: Record<string, Color> = {
-  five_hour: 'permission',
-  seven_day: 'planMode',
-  spend_limit: 'autoAccept',
-}
 
 /** 1234 -> "1.2k", 2_500_000 -> "2.5M". */
 export function fmt(n: number): string {
@@ -42,17 +44,6 @@ export function fmt(n: number): string {
 
 function trim(x: number): string {
   return (x >= 100 ? x.toFixed(0) : x.toFixed(1)).replace(/\.0$/, '')
-}
-
-function levelColor(percent: number, warn: number, danger: number, base: Color): Color {
-  if (percent >= danger) return 'error'
-  if (percent >= warn) return 'warning'
-  return base
-}
-
-/** "8%" -> "8%  ": mesma largura, para o que vem depois ficar alinhado. */
-function percent(n: number): string {
-  return `${Math.round(n)}%`.padEnd(4)
 }
 
 /** Tempo até o reset: "45 min", "2h 10min", "3 dias". */
@@ -157,77 +148,99 @@ export const register: Register = on => {
     }
 
     const { Box, Button, Text } = $.ui.resolve(e)
-    const wide = e.props.bodyColumns >= 94
+    const showBars = e.props.bodyColumns >= 50
     const now = m?.rateLimits.some(r => r.resetsAt) ? await $.clock.now() : 0
 
-    const bar = (pct: number, cells: number, color: Color) => {
+    const bar = (pct: number, cells: number) => {
       const filled = Math.min(cells, Math.max(pct > 0 ? 1 : 0, Math.round((pct / 100) * cells)))
       return (
         <Text>
-          <Text color="subtle">▕</Text>
-          <Text color={color}>{'█'.repeat(filled)}</Text>
-          <Text color="subtle">{'░'.repeat(cells - filled)}</Text>
-          <Text color="subtle">▏</Text>{' '}
+          <Text color="subtle">[</Text>
+          <Text color={ORANGE}>{'■'.repeat(filled)}</Text>
+          <Text color="subtle">{'□'.repeat(cells - filled)}</Text>
+          <Text color="subtle">]</Text>{' '}
         </Text>
       )
     }
 
     const LABEL = 16
-    let hideShown = false
-    const row = (key: string, label: string, body: RenderElement, tone?: Color) => {
-      const withHide = !hideShown
-      hideShown = true
+    const hide = (
+      <Box key="hide-box" flexShrink={0}>
+        <Button key="hide" label="Ocultar" onPress={() => update($, isHidden, () => true)} />
+      </Box>
+    )
+
+    type Usage = { key: string; label: string; pct: number; detail?: string }
+    const usage: Usage[] = []
+    if (m && m.contextTokens !== undefined) {
+      usage.push({
+        key: 'context',
+        label: 'Contexto',
+        pct: m.contextPercent ?? 0,
+        detail: `${fmt(m.contextTokens)} - ${fmt(m.contextWindow)}`,
+      })
+    }
+    for (const r of m?.rateLimits ?? []) {
+      usage.push({
+        key: `limit:${r.kind}`,
+        label: LIMIT_LABELS[r.kind] ?? r.kind,
+        pct: r.percentUsed,
+        detail: untilReset(r.resetsAt, now),
+      })
+    }
+
+    /** Barra, percentual e detalhe; `aligned` completa o percentual para os detalhes ficarem em coluna. */
+    const value = (u: Usage, aligned: boolean) => {
+      const pctText = `${Math.round(u.pct)}%`
       return (
-        <Box key={key} flexDirection="row">
-          <Box width={LABEL} flexShrink={0}>
-            {tone ? <Text color={tone}>{label}</Text> : <Text weight="bold">{label}</Text>}
-          </Box>
-          <Box flexGrow={1} flexShrink={1}>
-            {body}
-          </Box>
-          {withHide ? (
-            <Box flexShrink={0}>
-              <Button key="hide" label="Ocultar" onPress={() => update($, isHidden, () => true)} />
-            </Box>
-          ) : null}
-        </Box>
+        <Text>
+          {showBars ? bar(u.pct, 10) : null}
+          <Text color={PERCENT} weight="bold">{aligned && u.detail ? pctText.padEnd(4) : pctText}</Text>
+          {u.detail ? <Text color="subtle">{' '}{u.detail}</Text> : null}
+        </Text>
       )
     }
+    const compactWidth = (u: Usage) =>
+      u.label.length + 2 + (showBars ? 13 : 0) + `${Math.round(u.pct)}%`.length + (u.detail ? u.detail.length + 1 : 0)
 
     const rows: RenderElement[] = []
+    const oneLine =
+      usage.reduce((w, u, i) => w + compactWidth(u) + (i > 0 ? SEPARATOR.length : 0), 0) <=
+      e.props.bodyColumns - 4 - HIDE_WIDTH
 
-    if (m && m.contextTokens !== undefined) {
-      const pct = m.contextPercent ?? 0
-      const color = levelColor(pct, 70, 85, COLORS.context)
+    if (usage.length > 0 && oneLine) {
+      // Cabem todos: lado a lado, separados por uma bolinha.
       rows.push(
-        row(
-          'context',
-          'Contexto',
-          <Text wrap="truncate-end">
-            {wide ? bar(pct, 20, color) : null}
-            <Text color={color} weight="bold">{percent(pct)}</Text>
-            <Text color="subtle">
-              {'  '}{fmt(m.contextTokens)} - {fmt(m.contextWindow)}
+        <Box key="usage" flexDirection="row">
+          <Box flexGrow={1} flexShrink={1}>
+            <Text wrap="truncate-end">
+              {usage.flatMap((u, i) => [
+                ...(i > 0 ? [<Text key={`sep${i}`} color="subtle">{SEPARATOR}</Text>] : []),
+                <Text key={u.key}>
+                  <Text weight="bold">{u.label}</Text>{'  '}
+                  {value(u, false)}
+                </Text>,
+              ])}
             </Text>
-          </Text>,
-        ),
+          </Box>
+          {hide}
+        </Box>,
       )
-    }
-
-    for (const r of m?.rateLimits ?? []) {
-      const color = levelColor(r.percentUsed, 70, 90, LIMIT_COLORS[r.kind] ?? 'ide')
-      const reset = untilReset(r.resetsAt, now)
-      rows.push(
-        row(
-          `limit:${r.kind}`,
-          LIMIT_LABELS[r.kind] ?? r.kind,
-          <Text wrap="truncate-end">
-            {wide ? bar(r.percentUsed, 20, color) : null}
-            <Text color={color} weight="bold">{percent(r.percentUsed)}</Text>
-            {reset ? <Text color="subtle">{'  '}{reset}</Text> : null}
-          </Text>,
-        ),
-      )
+    } else {
+      // Não cabem: um por linha, em colunas alinhadas.
+      usage.forEach((u, i) => {
+        rows.push(
+          <Box key={u.key} flexDirection="row">
+            <Box width={LABEL} flexShrink={0}>
+              <Text weight="bold">{u.label}</Text>
+            </Box>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text wrap="truncate-end">{value(u, true)}</Text>
+            </Box>
+            {i === 0 ? hide : null}
+          </Box>,
+        )
+      })
     }
 
     const tokens: string[] = []
@@ -246,18 +259,19 @@ export const register: Register = on => {
     if (all.length > 0) {
       if (rows.length > 0) rows.push(<Box key="gap" height={1} />)
       rows.push(
-        row(
-          'spent',
-          'Sessão',
-          <Box flexDirection="column">
+        <Box key="spent" flexDirection="row">
+          <Box width={LABEL} flexShrink={0}>
+            <Text color={SESSION}>Sessão</Text>
+          </Box>
+          <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             {lines.map((l, i) => (
               <Text key={`l${i}`} color={SESSION} wrap="truncate-end">
                 {l.join(' · ')}
               </Text>
             ))}
-          </Box>,
-          SESSION,
-        ),
+          </Box>
+          {usage.length === 0 ? hide : null}
+        </Box>,
       )
     }
 
@@ -266,7 +280,7 @@ export const register: Register = on => {
         flexDirection="column"
         width={e.props.bodyColumns}
         borderStyle="round"
-        borderColor="subtle"
+        borderColor={ORANGE}
         paddingX={1}
       >
         {rows}
